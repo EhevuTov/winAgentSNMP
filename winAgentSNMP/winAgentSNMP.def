@@ -1,0 +1,6 @@
+LIBRARY winAgentSNMP
+
+EXPORTS
+  SnmpExtensionInit
+;  SnmpExtensionTrap
+  SnmpExtensionQuery
