@@ -2,6 +2,7 @@
 
 #include <snmp.h>
 
+
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
                        LPVOID lpReserved
@@ -70,11 +71,20 @@ BOOL WINAPI SnmpExtensionInit (
 	OUT	HANDLE				*phPollForTrapEvent,
 	OUT	AsnObjectIdentifier	*pSupportedView )
 {
+	#if _DEBUG
+		SnmpSvcSetLogLevel(SNMP_LOG_VERBOSE);
+		SnmpSvcSetLogType(SNMP_OUTPUT_TO_LOGFILE);
+	#else
+		SnmpSvcSetLogLevel(SNMP_LOG_ERROR);
+		SnmpSvcSetLogType(SNMP_OUTPUT_TO_LOGFILE);
+	#endif
+
 	BOOL fResult = TRUE;
 	*phPollForTrapEvent = NULL;
 	*pSupportedView = mibOid;
 	/*
 	*phPollForTrapEvent = CreateEvent ( NULL, FALSE, FALSE, NULL );
+	
 	if ( *phPollForTrapEvent != NULL )
 	{
 		ghTrapEvent = *phPollForTrapEvent;
@@ -96,6 +106,7 @@ BOOL WINAPI	SnmpExtensionQuery (
     OUT AsnInteger            *pErrorIndex
 	)
 {
+
 	BOOL fResult	= TRUE;
 	*pErrorStatus	= SNMP_ERRORSTATUS_NOERROR;
 	//*pErrorStatus	= SNMP_ERRORSTATUS_TOOBIG;
@@ -109,22 +120,31 @@ BOOL WINAPI	SnmpExtensionQuery (
 		fResult = SnmpUtilOidCpy	(&pVariableBindingsList->list[i].name, &mibOid);
 		fResult = SnmpUtilOidAppend	(&pVariableBindingsList->list[i].name, &gMibTable[i].asnOid);
 		//fResult = SnmpUtilVarBindCpy(&pVariableBindingsList->list[i], &gMibTable[i]);
-		
-		
-		pVariableBindingsList->list[i].value.asnType = ASN_OCTETSTRING;
-		pVariableBindingsList->list[i].value.asnValue.string.dynamic = TRUE;
-		pVariableBindingsList->list[i].value.asnValue.string.stream = (BYTE*)SnmpUtilMemAlloc (strlen(g_szName)+1);
-		pVariableBindingsList->list[i].value.asnValue.string.length = strlen (g_szName);
-		strncpy ((char*)pVariableBindingsList->list[i].value.asnValue.string.stream,g_szName, pVariableBindingsList->list[i].value.asnValue.string.length);
-		pVariableBindingsList->list[i].value.asnValue.string.stream[pVariableBindingsList->list[i].value.asnValue.string.length] = NULL;
-		
+
 		//*pErrorStatus = getStoreVar( &gMibTable[i], &pVariableBindingsList->list[i].value);
 		
 		*pErrorIndex = i;
+
+/*
+		SnmpUtilDbgPrint(
+			SNMP_OUTPUT_TO_LOGFILE,   // see log levels from snmp.h
+			"VarBind[%d]: %s\n",
+			i,
+			getStoreVar(&gMibTable[i], &pVariableBindingsList->list[i].value)
+		);
+*/
+		SnmpUtilDbgPrint(
+			SNMP_OUTPUT_TO_LOGFILE,   // see log levels from snmp.h
+			"VarBind[%d]:\n",
+			i
+		);
+		*pErrorStatus = getStoreVar(&gMibTable[i], &pVariableBindingsList->list[i].value);
+
 	}
 
 	return (fResult);
 }
+
 
 int getStoreVar(MIB_ENTRY* pMIB, AsnAny *pasnValue)
 {
@@ -147,13 +167,11 @@ int getStoreVar(MIB_ENTRY* pMIB, AsnAny *pasnValue)
 		pasnValue->asnValue.unsigned32 = *(AsnUnsigned32*)pMIB->pStorageValue;
 		break;
 	case ASN_OCTETSTRING:
-		pasnValue->asnValue.string.length = strlen(*(LPSTR*)pMIB->pStorageValue);
+		pasnValue->asnValue.string.length = strlen((char*)pMIB->pStorageValue);
 		pasnValue->asnValue.string.stream =(unsigned char*)SnmpUtilMemAlloc(pasnValue->asnValue.string.length * sizeof(char));
-
-		memcpy(pasnValue->asnValue.string.stream,*(LPSTR*)pMIB->pStorageValue,pasnValue->asnValue.string.length);
+		strncpy ((char*)pasnValue->asnValue.string.stream,g_szName, pasnValue->asnValue.string.length);
 		pasnValue->asnValue.string.dynamic = TRUE;
-		pasnValue->asnValue.string.stream[pasnValue->asnValue.string.length] = 0; 
-
+		pasnValue->asnValue.string.stream[pasnValue->asnValue.string.length] = 0;
 		break;
 	case ASN_COUNTER64:
 		pasnValue->asnValue.counter64 = *(AsnCounter64*)pMIB->pStorageValue;
@@ -183,6 +201,7 @@ int getStoreVar(MIB_ENTRY* pMIB, AsnAny *pasnValue)
 	}
 	return SNMP_ERRORSTATUS_NOERROR;
 }
+
 /*
 BOOL WINAPI SnmpExtensionTrap (
     OUT AsnObjectIdentifier *enterprise,
